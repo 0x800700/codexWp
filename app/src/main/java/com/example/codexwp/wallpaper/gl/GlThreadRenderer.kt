@@ -90,6 +90,8 @@ class GlThreadRenderer(
                 touch.x1 = x1
                 touch.y1 = y1
                 touch.isDown1 = true
+                touch.centerX = (touch.x0 + touch.x1) * 0.5f
+                touch.centerY = (touch.y0 + touch.y1) * 0.5f
             } else {
                 touch.isDown1 = false
             }
@@ -104,6 +106,15 @@ class GlThreadRenderer(
                         touch.centerY = touch.y0
                         touch.swirlAccum = 0f
                         touch.lastAngle = 0f
+                    }
+                    if (count > 1) {
+                        val dx = touch.x0 - touch.x1
+                        val dy = touch.y0 - touch.y1
+                        touch.pinchStartDist2 = dx * dx + dy * dy
+                        touch.pinchStartTime = now
+                        touch.pinchTriggered = false
+                        touch.centerX = (touch.x0 + touch.x1) * 0.5f
+                        touch.centerY = (touch.y0 + touch.y1) * 0.5f
                     }
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -122,11 +133,24 @@ class GlThreadRenderer(
                                 if (delta < -PI) delta += (2.0 * PI).toFloat()
                                 touch.swirlAccum += kotlin.math.abs(delta)
                                 if (touch.swirlAccum > (2.0 * PI * 0.85).toFloat()) {
-                                    touch.tunnelTime = 7.0f
+                                    touch.tunnelTime = 15.0f
                                     touch.swirlAccum = 0f
                                 }
                             }
                             touch.lastAngle = angle
+                        }
+                    }
+                    if (count > 1 && !touch.pinchTriggered) {
+                        touch.centerX = (touch.x0 + touch.x1) * 0.5f
+                        touch.centerY = (touch.y0 + touch.y1) * 0.5f
+                        val dx = touch.x0 - touch.x1
+                        val dy = touch.y0 - touch.y1
+                        val dist2 = dx * dx + dy * dy
+                        val grow = dist2 / (touch.pinchStartDist2 + 1e-6f)
+                        val elapsedMs = (now - touch.pinchStartTime) / 1_000_000L
+                        if (elapsedMs < 700 && grow > 1.35f * 1.35f) {
+                            touch.tunnelTime = 7.0f
+                            touch.pinchTriggered = true
                         }
                     }
                 }
@@ -135,6 +159,10 @@ class GlThreadRenderer(
                 MotionEvent.ACTION_CANCEL -> {
                     if (count <= 1) touch.isDown1 = false
                     if (count == 0) touch.isDown0 = false
+                    if (count < 2) {
+                        touch.pinchStartDist2 = 0f
+                        touch.pinchTriggered = false
+                    }
                 }
             }
         }
@@ -239,9 +267,9 @@ class GlThreadRenderer(
                 tunnelY = touch.centerY
                 val tLeft = touch.tunnelTime
                 if (tLeft > 0f) {
-                    val fadeIn = (1f - (tLeft / 7.0f)).coerceIn(0f, 1f)
-                    val fadeOut = (tLeft / 7.0f).coerceIn(0f, 1f)
-                    tunnelStrength = min(fadeIn * 3f, fadeOut * 3f)
+                    val fadeIn = (1f - (tLeft / 15.0f)).coerceIn(0f, 1f)
+                    val fadeOut = (tLeft / 15.0f).coerceIn(0f, 1f)
+                    tunnelStrength = min(fadeIn * 5f, fadeOut * 5f)
                 }
             } else {
                 touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
@@ -365,8 +393,10 @@ void main() {
   vec2 dp = p - tc;
   float rr = length(dp) + 1e-4;
   float ang = atan(dp.y, dp.x);
-  float swirl = u_tunnelStrength * exp(-rr * 2.2);
-  ang += swirl;
+  float pull = u_tunnelStrength * exp(-rr * 1.2);
+  float twist = u_tunnelStrength * exp(-rr * 1.8);
+  ang += twist * 0.8 + t * 0.55 * pull;
+  rr = rr * (1.0 - pull * 0.55);
   dp = vec2(cos(ang), sin(ang)) * rr;
   p = tc + dp;
 
@@ -426,7 +456,8 @@ void main() {
   float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
   speckle = pow(max(0.0, speckle - 0.55), 3.0);
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9) * vign * tail;
+  float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost) * vign * tail;
   outColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
@@ -521,8 +552,10 @@ void main() {
   vec2 dp = p - tc;
   float rr = length(dp) + 1e-4;
   float ang = atan(dp.y, dp.x);
-  float swirl = u_tunnelStrength * exp(-rr * 2.2);
-  ang += swirl;
+  float pull = u_tunnelStrength * exp(-rr * 1.2);
+  float twist = u_tunnelStrength * exp(-rr * 1.8);
+  ang += twist * 0.8 + t * 0.55 * pull;
+  rr = rr * (1.0 - pull * 0.55);
   dp = vec2(cos(ang), sin(ang)) * rr;
   p = tc + dp;
 
@@ -579,7 +612,8 @@ void main() {
   float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
   speckle = pow(max(0.0, speckle - 0.55), 3.0);
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9) * vign * tail;
+  float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost) * vign * tail;
   gl_FragColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
