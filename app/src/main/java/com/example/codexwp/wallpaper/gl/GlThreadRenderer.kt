@@ -308,10 +308,10 @@ void main() {
 
   // multi-layer feathered streaks (different speeds per layer)
   float tA = t * 1.00;
-  float tB = t * 0.82;
-  float tC = t * 1.18;
-  float tD = t * 0.66;
-  float tE = t * 1.35;
+  float tB = t * 0.70;
+  float tC = t * 1.40;
+  float tD = t * 0.40;
+  float tE = t * 1.90;
 
   float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
   float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
@@ -451,10 +451,10 @@ void main() {
   float x = p.x;
 
   float tA = t * 1.00;
-  float tB = t * 0.82;
-  float tC = t * 1.18;
-  float tD = t * 0.66;
-  float tE = t * 1.35;
+  float tB = t * 0.70;
+  float tC = t * 1.40;
+  float tD = t * 0.40;
+  float tE = t * 1.90;
 
   float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
   float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
