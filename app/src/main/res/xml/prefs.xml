@@ -36,4 +36,8 @@
         android:entries="@array/pref_fps_entries"
         android:entryValues="@array/pref_fps_values" />
 
+    <Preference
+        android:key="resetDefaults"
+        android:title="Reset to default" />
+
 </PreferenceScreen>

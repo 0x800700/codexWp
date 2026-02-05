@@ -68,29 +68,44 @@ class GlThreadRenderer(
         val w = width
         val h = height
         if (w <= 0 || h <= 0) return
-        val x = (ev.x / w).coerceIn(0f, 1f)
-        val y = (ev.y / h).coerceIn(0f, 1f)
         val now = System.nanoTime()
         synchronized(lock) {
-            val prevX = touch.xNorm
-            val prevY = touch.yNorm
-            touch.xNorm = x
-            touch.yNorm = y
-            touch.dxNorm = x - prevX
-            touch.dyNorm = y - prevY
             touch.lastEventNanos = now
+            val count = ev.pointerCount
+            if (count > 0) {
+                val x0 = (ev.getX(0) / w).coerceIn(0f, 1f)
+                val y0 = (ev.getY(0) / h).coerceIn(0f, 1f)
+                touch.x0 = x0
+                touch.y0 = y0
+                touch.isDown0 = true
+            } else {
+                touch.isDown0 = false
+            }
+            if (count > 1) {
+                val x1 = (ev.getX(1) / w).coerceIn(0f, 1f)
+                val y1 = (ev.getY(1) / h).coerceIn(0f, 1f)
+                touch.x1 = x1
+                touch.y1 = y1
+                touch.isDown1 = true
+            } else {
+                touch.isDown1 = false
+            }
+
             when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    touch.isDown = true
-                    touch.strength = 1.0f
+                MotionEvent.ACTION_DOWN,
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (count > 0) touch.strength0 = 1.0f
+                    if (count > 1) touch.strength1 = 1.0f
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    touch.isDown = true
-                    touch.strength = min(1.0f, touch.strength + 0.06f)
+                    if (count > 0) touch.strength0 = min(1.0f, touch.strength0 + 0.06f)
+                    if (count > 1) touch.strength1 = min(1.0f, touch.strength1 + 0.06f)
                 }
                 MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_POINTER_UP,
                 MotionEvent.ACTION_CANCEL -> {
-                    touch.isDown = false
+                    if (count <= 1) touch.isDown1 = false
+                    if (count == 0) touch.isDown0 = false
                 }
             }
         }
@@ -165,21 +180,25 @@ class GlThreadRenderer(
         val s = settings
         val intensity = if (s.fpsMode == SettingsState.FPS_BATTERY) s.intensity * 0.85f else s.intensity
 
-        var touchX = 0f
-        var touchY = 0f
-        var touchDx = 0f
-        var touchDy = 0f
-        var touchStrength = 0f
+        var touchX0 = 0f
+        var touchY0 = 0f
+        var touchS0 = 0f
+        var touchX1 = 0f
+        var touchY1 = 0f
+        var touchS1 = 0f
         synchronized(lock) {
             if (s.motionMode == SettingsState.MOTION_SWIPE_TOUCH) {
-                touchX = touch.xNorm
-                touchY = touch.yNorm
-                touchDx = touch.dxNorm
-                touchDy = touch.dyNorm
-                touchStrength = touch.strength
-                touch.strength = max(0f, touch.strength - dtSec * 1.0f)
+                touchX0 = touch.x0
+                touchY0 = touch.y0
+                touchS0 = touch.strength0
+                touchX1 = touch.x1
+                touchY1 = touch.y1
+                touchS1 = touch.strength1
+                touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
+                touch.strength1 = max(0f, touch.strength1 - dtSec * 1.0f)
             } else {
-                touch.strength = max(0f, touch.strength - dtSec * 1.0f)
+                touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
+                touch.strength1 = max(0f, touch.strength1 - dtSec * 1.0f)
             }
         }
 
@@ -188,7 +207,7 @@ class GlThreadRenderer(
         program.setTime(timeSec)
         program.setDt(dtSec)
         program.setHomeX(homeXOffset)
-        program.setTouch(touchX, touchY, touchDx, touchDy, touchStrength)
+        program.setTouch(touchX0, touchY0, touchS0, touchX1, touchY1, touchS1)
         program.setIntensity(intensity)
         program.setSpeed(s.speed)
         program.setColorMode(s.colorMode)
@@ -220,9 +239,10 @@ uniform float u_time;
 uniform float u_dt;
 
 uniform float u_homeX;
-uniform vec2  u_touchPos;
-uniform vec2  u_touchDelta;
-uniform float u_touchStrength;
+uniform vec2  u_touchPos0;
+uniform vec2  u_touchPos1;
+uniform float u_touchStrength0;
+uniform float u_touchStrength1;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -267,14 +287,21 @@ void main() {
   float n2 = noise(p*3.5 + vec2(-t*0.12, t*0.22));
   vec2 warp = vec2(n1 - 0.5, n2 - 0.5);
 
-  vec2 tp = (u_touchPos - 0.5);
-  tp.x *= u_resolution.x / u_resolution.y;
-  vec2 d = p - tp;
-  float dist = length(d) + 1e-4;
-  float touchFalloff = exp(-dist*5.0);
-  vec2 touchWarp = (vec2(-d.y, d.x) / dist) * (u_touchStrength * touchFalloff) * 0.08;
+  vec2 tp0 = (u_touchPos0 - 0.5);
+  tp0.x *= u_resolution.x / u_resolution.y;
+  vec2 d0 = p - tp0;
+  float dist0 = length(d0) + 1e-4;
+  float fall0 = exp(-dist0*5.0);
+  vec2 touchWarp0 = (vec2(-d0.y, d0.x) / dist0) * (u_touchStrength0 * fall0) * 0.07;
 
-  p += (warp * 0.25 + touchWarp) * mix(0.35, 1.1, u_intensity);
+  vec2 tp1 = (u_touchPos1 - 0.5);
+  tp1.x *= u_resolution.x / u_resolution.y;
+  vec2 d1 = p - tp1;
+  float dist1 = length(d1) + 1e-4;
+  float fall1 = exp(-dist1*5.0);
+  vec2 touchWarp1 = (vec2(-d1.y, d1.x) / dist1) * (u_touchStrength1 * fall1) * 0.07;
+
+  p += (warp * 0.25 + touchWarp0 + touchWarp1) * mix(0.35, 1.1, u_intensity);
   p.x += ox;
 
   float x = p.x;
@@ -283,22 +310,32 @@ void main() {
   float y0a = 0.23*sin(1.6*x + t*0.85) + 0.10*sin(3.2*x - t*0.55);
   float y0b = 0.18*sin(1.1*x - t*0.65) + 0.08*sin(2.6*x + t*0.35);
   float y0c = 0.12*sin(2.2*x + t*0.45) + 0.06*sin(4.1*x - t*0.25);
+  float y0d = 0.09*sin(2.8*x + t*0.30) + 0.05*sin(5.0*x + t*0.15);
+  float y0e = 0.07*sin(3.4*x - t*0.22) + 0.04*sin(6.2*x - t*0.12);
 
   float yA = p.y - y0a;
   float yB = p.y - y0b;
   float yC = p.y - y0c;
+  float yD = p.y - y0d;
+  float yE = p.y - y0e;
 
   float thA = 0.045 + 0.02*sin(t + x*1.6);
   float thB = 0.035 + 0.015*sin(t*1.2 + x*2.1);
   float thC = 0.028 + 0.012*sin(t*1.4 + x*2.6);
+  float thD = 0.022 + 0.010*sin(t*1.6 + x*3.1);
+  float thE = 0.018 + 0.008*sin(t*1.8 + x*3.6);
 
   float coreA = exp(-(yA*yA)/(thA*thA));
   float coreB = exp(-(yB*yB)/(thB*thB));
   float coreC = exp(-(yC*yC)/(thC*thC));
+  float coreD = exp(-(yD*yD)/(thD*thD));
+  float coreE = exp(-(yE*yE)/(thE*thE));
 
   float glowA = exp(-(yA*yA)/(thA*thA*9.0));
   float glowB = exp(-(yB*yB)/(thB*thB*8.0));
   float glowC = exp(-(yC*yC)/(thC*thC*7.0));
+  float glowD = exp(-(yD*yD)/(thD*thD*6.0));
+  float glowE = exp(-(yE*yE)/(thE*thE*6.0));
 
   // longer tail: soften with directional mask
   float tail = smoothstep(-0.9, 0.6, p.x);
@@ -307,10 +344,14 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6;
-  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45;
+  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6 + coreD*0.5 + coreE*0.4;
+  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45 + glowD*0.35 + glowE*0.28;
 
-  vec3 rgb = col * (aCore + aGlow) * vign * tail;
+  // speckle particles along the streaks
+  float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
+  speckle = pow(max(0.0, speckle - 0.55), 3.0);
+
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9) * vign * tail;
   outColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
@@ -336,9 +377,10 @@ uniform float u_time;
 uniform float u_dt;
 
 uniform float u_homeX;
-uniform vec2  u_touchPos;
-uniform vec2  u_touchDelta;
-uniform float u_touchStrength;
+uniform vec2  u_touchPos0;
+uniform vec2  u_touchPos1;
+uniform float u_touchStrength0;
+uniform float u_touchStrength1;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -383,14 +425,21 @@ void main() {
   float n2 = noise(p*3.5 + vec2(-t*0.12, t*0.22));
   vec2 warp = vec2(n1 - 0.5, n2 - 0.5);
 
-  vec2 tp = (u_touchPos - 0.5);
-  tp.x *= u_resolution.x / u_resolution.y;
-  vec2 d = p - tp;
-  float dist = length(d) + 1e-4;
-  float touchFalloff = exp(-dist*5.0);
-  vec2 touchWarp = (vec2(-d.y, d.x) / dist) * (u_touchStrength * touchFalloff) * 0.08;
+  vec2 tp0 = (u_touchPos0 - 0.5);
+  tp0.x *= u_resolution.x / u_resolution.y;
+  vec2 d0 = p - tp0;
+  float dist0 = length(d0) + 1e-4;
+  float fall0 = exp(-dist0*5.0);
+  vec2 touchWarp0 = (vec2(-d0.y, d0.x) / dist0) * (u_touchStrength0 * fall0) * 0.07;
 
-  p += (warp * 0.25 + touchWarp) * mix(0.35, 1.1, u_intensity);
+  vec2 tp1 = (u_touchPos1 - 0.5);
+  tp1.x *= u_resolution.x / u_resolution.y;
+  vec2 d1 = p - tp1;
+  float dist1 = length(d1) + 1e-4;
+  float fall1 = exp(-dist1*5.0);
+  vec2 touchWarp1 = (vec2(-d1.y, d1.x) / dist1) * (u_touchStrength1 * fall1) * 0.07;
+
+  p += (warp * 0.25 + touchWarp0 + touchWarp1) * mix(0.35, 1.1, u_intensity);
   p.x += ox;
 
   float x = p.x;
@@ -398,22 +447,32 @@ void main() {
   float y0a = 0.23*sin(1.6*x + t*0.85) + 0.10*sin(3.2*x - t*0.55);
   float y0b = 0.18*sin(1.1*x - t*0.65) + 0.08*sin(2.6*x + t*0.35);
   float y0c = 0.12*sin(2.2*x + t*0.45) + 0.06*sin(4.1*x - t*0.25);
+  float y0d = 0.09*sin(2.8*x + t*0.30) + 0.05*sin(5.0*x + t*0.15);
+  float y0e = 0.07*sin(3.4*x - t*0.22) + 0.04*sin(6.2*x - t*0.12);
 
   float yA = p.y - y0a;
   float yB = p.y - y0b;
   float yC = p.y - y0c;
+  float yD = p.y - y0d;
+  float yE = p.y - y0e;
 
   float thA = 0.045 + 0.02*sin(t + x*1.6);
   float thB = 0.035 + 0.015*sin(t*1.2 + x*2.1);
   float thC = 0.028 + 0.012*sin(t*1.4 + x*2.6);
+  float thD = 0.022 + 0.010*sin(t*1.6 + x*3.1);
+  float thE = 0.018 + 0.008*sin(t*1.8 + x*3.6);
 
   float coreA = exp(-(yA*yA)/(thA*thA));
   float coreB = exp(-(yB*yB)/(thB*thB));
   float coreC = exp(-(yC*yC)/(thC*thC));
+  float coreD = exp(-(yD*yD)/(thD*thD));
+  float coreE = exp(-(yE*yE)/(thE*thE));
 
   float glowA = exp(-(yA*yA)/(thA*thA*9.0));
   float glowB = exp(-(yB*yB)/(thB*thB*8.0));
   float glowC = exp(-(yC*yC)/(thC*thC*7.0));
+  float glowD = exp(-(yD*yD)/(thD*thD*6.0));
+  float glowE = exp(-(yE*yE)/(thE*thE*6.0));
 
   float tail = smoothstep(-0.9, 0.6, p.x);
   float vign = smoothstep(1.25, 0.25, length(p-vec2(0.45,-0.2)));
@@ -421,10 +480,13 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6;
-  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45;
+  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6 + coreD*0.5 + coreE*0.4;
+  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45 + glowD*0.35 + glowE*0.28;
 
-  vec3 rgb = col * (aCore + aGlow) * vign * tail;
+  float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
+  speckle = pow(max(0.0, speckle - 0.55), 3.0);
+
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9) * vign * tail;
   gl_FragColor = vec4(rgb, 1.0);
 }
 """.trimIndent()

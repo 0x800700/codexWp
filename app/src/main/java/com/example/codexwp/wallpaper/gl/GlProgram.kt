@@ -8,9 +8,10 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
     private val uTime: Int
     private val uDt: Int
     private val uHomeX: Int
-    private val uTouchPos: Int
-    private val uTouchDelta: Int
-    private val uTouchStrength: Int
+    private val uTouchPos0: Int
+    private val uTouchPos1: Int
+    private val uTouchStrength0: Int
+    private val uTouchStrength1: Int
     private val uIntensity: Int
     private val uSpeed: Int
     private val uColorMode: Int
@@ -38,9 +39,10 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
         uTime = GLES20.glGetUniformLocation(programId, "u_time")
         uDt = GLES20.glGetUniformLocation(programId, "u_dt")
         uHomeX = GLES20.glGetUniformLocation(programId, "u_homeX")
-        uTouchPos = GLES20.glGetUniformLocation(programId, "u_touchPos")
-        uTouchDelta = GLES20.glGetUniformLocation(programId, "u_touchDelta")
-        uTouchStrength = GLES20.glGetUniformLocation(programId, "u_touchStrength")
+        uTouchPos0 = GLES20.glGetUniformLocation(programId, "u_touchPos0")
+        uTouchPos1 = GLES20.glGetUniformLocation(programId, "u_touchPos1")
+        uTouchStrength0 = GLES20.glGetUniformLocation(programId, "u_touchStrength0")
+        uTouchStrength1 = GLES20.glGetUniformLocation(programId, "u_touchStrength1")
         uIntensity = GLES20.glGetUniformLocation(programId, "u_intensity")
         uSpeed = GLES20.glGetUniformLocation(programId, "u_speed")
         uColorMode = GLES20.glGetUniformLocation(programId, "u_colorMode")
@@ -66,10 +68,11 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
         GLES20.glUniform1f(uHomeX, x)
     }
 
-    fun setTouch(posX: Float, posY: Float, dx: Float, dy: Float, strength: Float) {
-        GLES20.glUniform2f(uTouchPos, posX, posY)
-        GLES20.glUniform2f(uTouchDelta, dx, dy)
-        GLES20.glUniform1f(uTouchStrength, strength)
+    fun setTouch(posX: Float, posY: Float, strength: Float, posX2: Float, posY2: Float, strength2: Float) {
+        GLES20.glUniform2f(uTouchPos0, posX, posY)
+        GLES20.glUniform2f(uTouchPos1, posX2, posY2)
+        GLES20.glUniform1f(uTouchStrength0, strength)
+        GLES20.glUniform1f(uTouchStrength1, strength2)
     }
 
     fun setIntensity(v: Float) {
