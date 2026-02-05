@@ -9,5 +9,10 @@ data class TouchState(
     var x1: Float = 0f,       // 0..1
     var y1: Float = 0f,       // 0..1
     var strength1: Float = 0f,    // decays over time
+    var centerX: Float = 0.5f,
+    var centerY: Float = 0.5f,
+    var lastAngle: Float = 0f,
+    var swirlAccum: Float = 0f,
+    var tunnelTime: Float = 0f,
     var lastEventNanos: Long = 0L
 )

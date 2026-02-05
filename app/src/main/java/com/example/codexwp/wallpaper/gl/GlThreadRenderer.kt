@@ -7,6 +7,8 @@ import android.view.MotionEvent
 import android.view.Surface
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.atan2
+import kotlin.math.PI
 
 class GlThreadRenderer(
     private val ctx: Context,
@@ -97,10 +99,36 @@ class GlThreadRenderer(
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     if (count > 0) touch.strength0 = 1.0f
                     if (count > 1) touch.strength1 = 1.0f
+                    if (count > 0) {
+                        touch.centerX = touch.x0
+                        touch.centerY = touch.y0
+                        touch.swirlAccum = 0f
+                        touch.lastAngle = 0f
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (count > 0) touch.strength0 = min(1.0f, touch.strength0 + 0.06f)
                     if (count > 1) touch.strength1 = min(1.0f, touch.strength1 + 0.06f)
+                    if (count > 0) {
+                        val cx = touch.centerX
+                        val cy = touch.centerY
+                        val dx = (touch.x0 - cx).toDouble()
+                        val dy = (touch.y0 - cy).toDouble()
+                        if (dx * dx + dy * dy > 0.0004) {
+                            val angle = atan2(dy, dx).toFloat()
+                            if (touch.lastAngle != 0f) {
+                                var delta = angle - touch.lastAngle
+                                if (delta > PI) delta -= (2.0 * PI).toFloat()
+                                if (delta < -PI) delta += (2.0 * PI).toFloat()
+                                touch.swirlAccum += kotlin.math.abs(delta)
+                                if (touch.swirlAccum > (2.0 * PI * 0.85).toFloat()) {
+                                    touch.tunnelTime = 7.0f
+                                    touch.swirlAccum = 0f
+                                }
+                            }
+                            touch.lastAngle = angle
+                        }
+                    }
                 }
                 MotionEvent.ACTION_UP,
                 MotionEvent.ACTION_POINTER_UP,
@@ -191,6 +219,9 @@ class GlThreadRenderer(
         var touchX1 = 0f
         var touchY1 = 0f
         var touchS1 = 0f
+        var tunnelX = 0.5f
+        var tunnelY = 0.5f
+        var tunnelStrength = 0f
         synchronized(lock) {
             if (s.motionMode == SettingsState.MOTION_SWIPE_TOUCH) {
                 touchX0 = touch.x0
@@ -201,6 +232,17 @@ class GlThreadRenderer(
                 touchS1 = touch.strength1
                 touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
                 touch.strength1 = max(0f, touch.strength1 - dtSec * 1.0f)
+                if (touch.tunnelTime > 0f) {
+                    touch.tunnelTime = max(0f, touch.tunnelTime - dtSec)
+                }
+                tunnelX = touch.centerX
+                tunnelY = touch.centerY
+                val tLeft = touch.tunnelTime
+                if (tLeft > 0f) {
+                    val fadeIn = (1f - (tLeft / 7.0f)).coerceIn(0f, 1f)
+                    val fadeOut = (tLeft / 7.0f).coerceIn(0f, 1f)
+                    tunnelStrength = min(fadeIn * 3f, fadeOut * 3f)
+                }
             } else {
                 touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
                 touch.strength1 = max(0f, touch.strength1 - dtSec * 1.0f)
@@ -213,6 +255,7 @@ class GlThreadRenderer(
         program.setDt(dtSec)
         program.setHomeX(homeXOffset)
         program.setTouch(touchX0, touchY0, touchS0, touchX1, touchY1, touchS1)
+        program.setTunnel(tunnelX, tunnelY, tunnelStrength)
         program.setIntensity(intensity)
         program.setSpeed(s.speed)
         program.setColorMode(s.colorMode)
@@ -257,6 +300,8 @@ uniform vec2  u_touchPos0;
 uniform vec2  u_touchPos1;
 uniform float u_touchStrength0;
 uniform float u_touchStrength1;
+uniform vec2  u_tunnelPos;
+uniform float u_tunnelStrength;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -314,6 +359,16 @@ void main() {
   float dist1 = length(d1) + 1e-4;
   float fall1 = exp(-dist1*5.0);
   vec2 touchWarp1 = (vec2(-d1.y, d1.x) / dist1) * (u_touchStrength1 * fall1) * 0.07;
+
+  vec2 tc = (u_tunnelPos - 0.5);
+  tc.x *= u_resolution.x / u_resolution.y;
+  vec2 dp = p - tc;
+  float rr = length(dp) + 1e-4;
+  float ang = atan(dp.y, dp.x);
+  float swirl = u_tunnelStrength * exp(-rr * 2.2);
+  ang += swirl;
+  dp = vec2(cos(ang), sin(ang)) * rr;
+  p = tc + dp;
 
   p += (warp * 0.25 + touchWarp0 + touchWarp1) * mix(0.35, 1.1, u_intensity);
   p.x += ox;
@@ -401,6 +456,8 @@ uniform vec2  u_touchPos0;
 uniform vec2  u_touchPos1;
 uniform float u_touchStrength0;
 uniform float u_touchStrength1;
+uniform vec2  u_tunnelPos;
+uniform float u_tunnelStrength;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -458,6 +515,16 @@ void main() {
   float dist1 = length(d1) + 1e-4;
   float fall1 = exp(-dist1*5.0);
   vec2 touchWarp1 = (vec2(-d1.y, d1.x) / dist1) * (u_touchStrength1 * fall1) * 0.07;
+
+  vec2 tc = (u_tunnelPos - 0.5);
+  tc.x *= u_resolution.x / u_resolution.y;
+  vec2 dp = p - tc;
+  float rr = length(dp) + 1e-4;
+  float ang = atan(dp.y, dp.x);
+  float swirl = u_tunnelStrength * exp(-rr * 2.2);
+  ang += swirl;
+  dp = vec2(cos(ang), sin(ang)) * rr;
+  p = tc + dp;
 
   p += (warp * 0.25 + touchWarp0 + touchWarp1) * mix(0.35, 1.1, u_intensity);
   p.x += ox;

@@ -12,6 +12,8 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
     private val uTouchPos1: Int
     private val uTouchStrength0: Int
     private val uTouchStrength1: Int
+    private val uTunnelPos: Int
+    private val uTunnelStrength: Int
     private val uIntensity: Int
     private val uSpeed: Int
     private val uColorMode: Int
@@ -43,6 +45,8 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
         uTouchPos1 = GLES20.glGetUniformLocation(programId, "u_touchPos1")
         uTouchStrength0 = GLES20.glGetUniformLocation(programId, "u_touchStrength0")
         uTouchStrength1 = GLES20.glGetUniformLocation(programId, "u_touchStrength1")
+        uTunnelPos = GLES20.glGetUniformLocation(programId, "u_tunnelPos")
+        uTunnelStrength = GLES20.glGetUniformLocation(programId, "u_tunnelStrength")
         uIntensity = GLES20.glGetUniformLocation(programId, "u_intensity")
         uSpeed = GLES20.glGetUniformLocation(programId, "u_speed")
         uColorMode = GLES20.glGetUniformLocation(programId, "u_colorMode")
@@ -73,6 +77,11 @@ class GlProgram(vertexSrc: String, fragmentSrc: String) {
         GLES20.glUniform2f(uTouchPos1, posX2, posY2)
         GLES20.glUniform1f(uTouchStrength0, strength)
         GLES20.glUniform1f(uTouchStrength1, strength2)
+    }
+
+    fun setTunnel(posX: Float, posY: Float, strength: Float) {
+        GLES20.glUniform2f(uTunnelPos, posX, posY)
+        GLES20.glUniform1f(uTunnelStrength, strength)
     }
 
     fun setIntensity(v: Float) {
