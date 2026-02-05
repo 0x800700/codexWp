@@ -38,6 +38,7 @@ class GlThreadRenderer(
     private lateinit var quad: FullscreenQuad
     private val timekeeper = Timekeeper()
     private var visualTimeSec = 0.0
+    private var rngState = 0x6D2B79F5
 
     fun startRenderer(): Unit = start()
 
@@ -134,6 +135,7 @@ class GlThreadRenderer(
                                 touch.swirlAccum += kotlin.math.abs(delta)
                                 if (touch.swirlAccum > (2.0 * PI * 0.85).toFloat()) {
                                     touch.tunnelTime = 15.0f
+                                    touch.tunnelMode = nextTunnelMode()
                                     touch.swirlAccum = 0f
                                 }
                             }
@@ -149,7 +151,8 @@ class GlThreadRenderer(
                         val grow = dist2 / (touch.pinchStartDist2 + 1e-6f)
                         val elapsedMs = (now - touch.pinchStartTime) / 1_000_000L
                         if (elapsedMs < 700 && grow > 1.35f * 1.35f) {
-                            touch.tunnelTime = 7.0f
+                            touch.tunnelTime = 15.0f
+                            touch.tunnelMode = nextTunnelMode()
                             touch.pinchTriggered = true
                         }
                     }
@@ -250,6 +253,8 @@ class GlThreadRenderer(
         var tunnelX = 0.5f
         var tunnelY = 0.5f
         var tunnelStrength = 0f
+        var tunnelMode = 0
+        var tunnelPhase = 0f
         synchronized(lock) {
             if (s.motionMode == SettingsState.MOTION_SWIPE_TOUCH) {
                 touchX0 = touch.x0
@@ -265,15 +270,21 @@ class GlThreadRenderer(
                 }
                 tunnelX = touch.centerX
                 tunnelY = touch.centerY
+                tunnelMode = touch.tunnelMode
                 val tLeft = touch.tunnelTime
                 if (tLeft > 0f) {
                     val fadeIn = (1f - (tLeft / 15.0f)).coerceIn(0f, 1f)
                     val fadeOut = (tLeft / 15.0f).coerceIn(0f, 1f)
                     tunnelStrength = min(fadeIn * 5f, fadeOut * 5f)
+                    touch.tunnelPhase += dtSec
+                } else {
+                    touch.tunnelPhase = 0f
                 }
+                tunnelPhase = touch.tunnelPhase
             } else {
                 touch.strength0 = max(0f, touch.strength0 - dtSec * 1.0f)
                 touch.strength1 = max(0f, touch.strength1 - dtSec * 1.0f)
+                touch.tunnelPhase = 0f
             }
         }
 
@@ -283,7 +294,7 @@ class GlThreadRenderer(
         program.setDt(dtSec)
         program.setHomeX(homeXOffset)
         program.setTouch(touchX0, touchY0, touchS0, touchX1, touchY1, touchS1)
-        program.setTunnel(tunnelX, tunnelY, tunnelStrength)
+        program.setTunnel(tunnelX, tunnelY, tunnelStrength, tunnelMode, tunnelPhase)
         program.setIntensity(intensity)
         program.setSpeed(s.speed)
         program.setColorMode(s.colorMode)
@@ -291,7 +302,20 @@ class GlThreadRenderer(
         windowSurface.swapBuffers()
     }
 
+    private fun nextTunnelMode(): Int {
+        rngState = nextRand(rngState)
+        return if ((rngState and 1) == 0) 1 else 2
+    }
+
     companion object {
+        private fun nextRand(state: Int): Int {
+            var x = state
+            x = x xor (x shl 13)
+            x = x xor (x ushr 17)
+            x = x xor (x shl 5)
+            return x
+        }
+
         private fun smoothstep(edge0: Double, edge1: Double, x: Double): Double {
             val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0.0, 1.0)
             return t * t * (3.0 - 2.0 * t)
@@ -330,6 +354,8 @@ uniform float u_touchStrength0;
 uniform float u_touchStrength1;
 uniform vec2  u_tunnelPos;
 uniform float u_tunnelStrength;
+uniform int   u_tunnelMode;
+uniform float u_tunnelPhase;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -395,8 +421,18 @@ void main() {
   float ang = atan(dp.y, dp.x);
   float pull = u_tunnelStrength * exp(-rr * 1.2);
   float twist = u_tunnelStrength * exp(-rr * 1.8);
-  ang += twist * 0.8 + t * 0.55 * pull;
-  rr = rr * (1.0 - pull * 0.55);
+
+  if (u_tunnelMode == 2) {
+    // ring tunnel: spiral squeeze + ring bands
+    float spin = u_tunnelPhase * 1.2;
+    ang += spin * pull + twist * 0.5;
+    rr = rr * (1.0 - pull * 0.45);
+  } else {
+    // vortex pull (default)
+    ang += twist * 0.8 + u_tunnelPhase * 0.8 * pull;
+    rr = rr * (1.0 - pull * 0.55);
+  }
+
   dp = vec2(cos(ang), sin(ang)) * rr;
   p = tc + dp;
 
@@ -457,7 +493,15 @@ void main() {
   speckle = pow(max(0.0, speckle - 0.55), 3.0);
 
   float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost) * vign * tail;
+  float ringMask = 0.0;
+  if (u_tunnelMode == 2) {
+    float rings = 0.5 + 0.5*sin(rr * 28.0 - u_tunnelPhase * 6.0);
+    float ringSharp = pow(rings, 6.0);
+    float seg = 0.5 + 0.5*sin(ang * 6.0 + u_tunnelPhase * 1.8);
+    ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
+  }
+
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost + ringMask) * vign * tail;
   outColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
@@ -489,6 +533,8 @@ uniform float u_touchStrength0;
 uniform float u_touchStrength1;
 uniform vec2  u_tunnelPos;
 uniform float u_tunnelStrength;
+uniform int   u_tunnelMode;
+uniform float u_tunnelPhase;
 
 uniform float u_intensity;
 uniform float u_speed;
@@ -554,8 +600,16 @@ void main() {
   float ang = atan(dp.y, dp.x);
   float pull = u_tunnelStrength * exp(-rr * 1.2);
   float twist = u_tunnelStrength * exp(-rr * 1.8);
-  ang += twist * 0.8 + t * 0.55 * pull;
-  rr = rr * (1.0 - pull * 0.55);
+
+  if (u_tunnelMode == 2) {
+    float spin = u_tunnelPhase * 1.2;
+    ang += spin * pull + twist * 0.5;
+    rr = rr * (1.0 - pull * 0.45);
+  } else {
+    ang += twist * 0.8 + u_tunnelPhase * 0.8 * pull;
+    rr = rr * (1.0 - pull * 0.55);
+  }
+
   dp = vec2(cos(ang), sin(ang)) * rr;
   p = tc + dp;
 
@@ -613,7 +667,15 @@ void main() {
   speckle = pow(max(0.0, speckle - 0.55), 3.0);
 
   float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost) * vign * tail;
+  float ringMask = 0.0;
+  if (u_tunnelMode == 2) {
+    float rings = 0.5 + 0.5*sin(rr * 28.0 - u_tunnelPhase * 6.0);
+    float ringSharp = pow(rings, 6.0);
+    float seg = 0.5 + 0.5*sin(ang * 6.0 + u_tunnelPhase * 1.8);
+    ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
+  }
+
+  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost + ringMask) * vign * tail;
   gl_FragColor = vec4(rgb, 1.0);
 }
 """.trimIndent()

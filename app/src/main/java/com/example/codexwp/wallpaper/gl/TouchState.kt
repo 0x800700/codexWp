@@ -14,5 +14,10 @@ data class TouchState(
     var lastAngle: Float = 0f,
     var swirlAccum: Float = 0f,
     var tunnelTime: Float = 0f,
+    var pinchStartDist2: Float = 0f,
+    var pinchStartTime: Long = 0L,
+    var pinchTriggered: Boolean = false,
+    var tunnelMode: Int = 0,
+    var tunnelPhase: Float = 0f,
     var lastEventNanos: Long = 0L
 )
