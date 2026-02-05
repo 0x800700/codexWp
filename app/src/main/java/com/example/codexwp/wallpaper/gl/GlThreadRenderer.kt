@@ -282,9 +282,9 @@ void main() {
 
   float ox = (u_homeX - 0.5) * 1.2;
   float baseSpeed = mix(0.4, 1.6, u_speed);
-  // slow-mo pulse: smoothly dips speed for a while, then returns to normal
+  // slow-mo pulse: about 20% of the time in slow motion, 80% normal
   float slowPhase = 0.5 + 0.5*sin(u_time * 0.25);
-  float slowFactor = mix(1.0, 0.45, smoothstep(0.25, 0.85, slowPhase));
+  float slowFactor = mix(1.0, 0.45, smoothstep(0.74, 0.94, slowPhase));
   float t = u_time * baseSpeed * slowFactor;
 
   float n1 = noise(p*2.0 + vec2(t*0.25, -t*0.18));
@@ -312,10 +312,10 @@ void main() {
 
   // multi-layer feathered streaks (different speeds per layer)
   float tA = t * 1.00;
-  float tB = t * 1.00;
-  float tC = t * 1.00;
-  float tD = t * 1.00;
-  float tE = t * 1.00;
+  float tB = t * 0.82;
+  float tC = t * 1.18;
+  float tD = t * 0.66;
+  float tE = t * 1.35;
 
   float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
   float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
@@ -431,7 +431,7 @@ void main() {
   float ox = (u_homeX - 0.5) * 1.2;
   float baseSpeed = mix(0.4, 1.6, u_speed);
   float slowPhase = 0.5 + 0.5*sin(u_time * 0.25);
-  float slowFactor = mix(1.0, 0.45, smoothstep(0.25, 0.85, slowPhase));
+  float slowFactor = mix(1.0, 0.45, smoothstep(0.74, 0.94, slowPhase));
   float t = u_time * baseSpeed * slowFactor;
 
   float n1 = noise(p*2.0 + vec2(t*0.25, -t*0.18));
@@ -458,10 +458,10 @@ void main() {
   float x = p.x;
 
   float tA = t * 1.00;
-  float tB = t * 1.00;
-  float tC = t * 1.00;
-  float tD = t * 1.00;
-  float tE = t * 1.00;
+  float tB = t * 0.82;
+  float tC = t * 1.18;
+  float tD = t * 0.66;
+  float tE = t * 1.35;
 
   float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
   float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
