@@ -281,11 +281,7 @@ void main() {
   p.x *= u_resolution.x / u_resolution.y;
 
   float ox = (u_homeX - 0.5) * 1.2;
-  float baseSpeed = mix(0.4, 1.6, u_speed);
-  // slow-mo pulse: about 20% of the time in slow motion, 80% normal
-  float slowPhase = 0.5 + 0.5*sin(u_time * 0.25);
-  float slowFactor = mix(1.0, 0.45, smoothstep(0.74, 0.94, slowPhase));
-  float t = u_time * baseSpeed * slowFactor;
+  float t = u_time * mix(0.4, 1.6, u_speed);
 
   float n1 = noise(p*2.0 + vec2(t*0.25, -t*0.18));
   float n2 = noise(p*3.5 + vec2(-t*0.12, t*0.22));
@@ -429,10 +425,7 @@ void main() {
   p.x *= u_resolution.x / u_resolution.y;
 
   float ox = (u_homeX - 0.5) * 1.2;
-  float baseSpeed = mix(0.4, 1.6, u_speed);
-  float slowPhase = 0.5 + 0.5*sin(u_time * 0.25);
-  float slowFactor = mix(1.0, 0.45, smoothstep(0.74, 0.94, slowPhase));
-  float t = u_time * baseSpeed * slowFactor;
+  float t = u_time * mix(0.4, 1.6, u_speed);
 
   float n1 = noise(p*2.0 + vec2(t*0.25, -t*0.18));
   float n2 = noise(p*3.5 + vec2(-t*0.12, t*0.22));
