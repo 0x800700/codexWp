@@ -306,12 +306,18 @@ void main() {
 
   float x = p.x;
 
-  // multi-layer feathered streaks
-  float y0a = 0.23*sin(1.6*x + t*0.85) + 0.10*sin(3.2*x - t*0.55);
-  float y0b = 0.18*sin(1.1*x - t*0.65) + 0.08*sin(2.6*x + t*0.35);
-  float y0c = 0.12*sin(2.2*x + t*0.45) + 0.06*sin(4.1*x - t*0.25);
-  float y0d = 0.09*sin(2.8*x + t*0.30) + 0.05*sin(5.0*x + t*0.15);
-  float y0e = 0.07*sin(3.4*x - t*0.22) + 0.04*sin(6.2*x - t*0.12);
+  // multi-layer feathered streaks (different speeds per layer)
+  float tA = t * 1.00;
+  float tB = t * 0.82;
+  float tC = t * 1.18;
+  float tD = t * 0.66;
+  float tE = t * 1.35;
+
+  float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
+  float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
+  float y0c = 0.12*sin(2.2*x + tC*0.45) + 0.06*sin(4.1*x - tC*0.25);
+  float y0d = 0.09*sin(2.8*x + tD*0.30) + 0.05*sin(5.0*x + tD*0.15);
+  float y0e = 0.07*sin(3.4*x - tE*0.22) + 0.04*sin(6.2*x - tE*0.12);
 
   float yA = p.y - y0a;
   float yB = p.y - y0b;
@@ -319,11 +325,11 @@ void main() {
   float yD = p.y - y0d;
   float yE = p.y - y0e;
 
-  float thA = 0.045 + 0.02*sin(t + x*1.6);
-  float thB = 0.035 + 0.015*sin(t*1.2 + x*2.1);
-  float thC = 0.028 + 0.012*sin(t*1.4 + x*2.6);
-  float thD = 0.022 + 0.010*sin(t*1.6 + x*3.1);
-  float thE = 0.018 + 0.008*sin(t*1.8 + x*3.6);
+  float thA = 0.045 + 0.02*sin(tA + x*1.6);
+  float thB = 0.035 + 0.015*sin(tB*1.2 + x*2.1);
+  float thC = 0.028 + 0.012*sin(tC*1.4 + x*2.6);
+  float thD = 0.022 + 0.010*sin(tD*1.6 + x*3.1);
+  float thE = 0.018 + 0.008*sin(tE*1.8 + x*3.6);
 
   float coreA = exp(-(yA*yA)/(thA*thA));
   float coreB = exp(-(yB*yB)/(thB*thB));
@@ -444,11 +450,17 @@ void main() {
 
   float x = p.x;
 
-  float y0a = 0.23*sin(1.6*x + t*0.85) + 0.10*sin(3.2*x - t*0.55);
-  float y0b = 0.18*sin(1.1*x - t*0.65) + 0.08*sin(2.6*x + t*0.35);
-  float y0c = 0.12*sin(2.2*x + t*0.45) + 0.06*sin(4.1*x - t*0.25);
-  float y0d = 0.09*sin(2.8*x + t*0.30) + 0.05*sin(5.0*x + t*0.15);
-  float y0e = 0.07*sin(3.4*x - t*0.22) + 0.04*sin(6.2*x - t*0.12);
+  float tA = t * 1.00;
+  float tB = t * 0.82;
+  float tC = t * 1.18;
+  float tD = t * 0.66;
+  float tE = t * 1.35;
+
+  float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
+  float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
+  float y0c = 0.12*sin(2.2*x + tC*0.45) + 0.06*sin(4.1*x - tC*0.25);
+  float y0d = 0.09*sin(2.8*x + tD*0.30) + 0.05*sin(5.0*x + tD*0.15);
+  float y0e = 0.07*sin(3.4*x - tE*0.22) + 0.04*sin(6.2*x - tE*0.12);
 
   float yA = p.y - y0a;
   float yB = p.y - y0b;
@@ -456,11 +468,11 @@ void main() {
   float yD = p.y - y0d;
   float yE = p.y - y0e;
 
-  float thA = 0.045 + 0.02*sin(t + x*1.6);
-  float thB = 0.035 + 0.015*sin(t*1.2 + x*2.1);
-  float thC = 0.028 + 0.012*sin(t*1.4 + x*2.6);
-  float thD = 0.022 + 0.010*sin(t*1.6 + x*3.1);
-  float thE = 0.018 + 0.008*sin(t*1.8 + x*3.6);
+  float thA = 0.045 + 0.02*sin(tA + x*1.6);
+  float thB = 0.035 + 0.015*sin(tB*1.2 + x*2.1);
+  float thC = 0.028 + 0.012*sin(tC*1.4 + x*2.6);
+  float thD = 0.022 + 0.010*sin(tD*1.6 + x*3.1);
+  float thE = 0.018 + 0.008*sin(tE*1.8 + x*3.6);
 
   float coreA = exp(-(yA*yA)/(thA*thA));
   float coreB = exp(-(yB*yB)/(thB*thB));
