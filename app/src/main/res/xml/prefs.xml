@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SeekBarPreference
+        android:key="intensity"
+        android:title="Intensity"
+        android:defaultValue="70"
+        android:min="0"
+        android:max="100" />
+
+    <SeekBarPreference
+        android:key="speed"
+        android:title="Speed"
+        android:defaultValue="60"
+        android:min="0"
+        android:max="100" />
+
+    <ListPreference
+        android:key="colorMode"
+        android:title="Color Mode"
+        android:defaultValue="0"
+        android:entries="@array/pref_color_entries"
+        android:entryValues="@array/pref_color_values" />
+
+    <ListPreference
+        android:key="motionMode"
+        android:title="Motion Mode"
+        android:defaultValue="1"
+        android:entries="@array/pref_motion_entries"
+        android:entryValues="@array/pref_motion_values" />
+
+    <ListPreference
+        android:key="fpsMode"
+        android:title="FPS Mode"
+        android:defaultValue="0"
+        android:entries="@array/pref_fps_entries"
+        android:entryValues="@array/pref_fps_values" />
+
+</PreferenceScreen>

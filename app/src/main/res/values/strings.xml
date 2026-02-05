@@ -1,0 +1,37 @@
+<resources>
+    <string name="app_name">codexWp</string>
+    <string name="wallpaper_name">AMOLED Wave</string>
+    <string name="wallpaper_desc">Glowing light streak on pure black background</string>
+    <string name="settings_title">AMOLED Wave Settings</string>
+
+    <string-array name="pref_color_entries">
+        <item>Rainbow</item>
+        <item>Warm</item>
+        <item>Cool</item>
+    </string-array>
+    <string-array name="pref_color_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+
+    <string-array name="pref_motion_entries">
+        <item>Swipe + Touch</item>
+        <item>Swipe Only</item>
+    </string-array>
+    <string-array name="pref_motion_values">
+        <item>1</item>
+        <item>0</item>
+    </string-array>
+
+    <string-array name="pref_fps_entries">
+        <item>Auto</item>
+        <item>60 FPS</item>
+        <item>Battery Saver</item>
+    </string-array>
+    <string-array name="pref_fps_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+</resources>
