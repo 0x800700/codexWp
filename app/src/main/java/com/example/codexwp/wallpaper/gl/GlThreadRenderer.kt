@@ -35,6 +35,7 @@ class GlThreadRenderer(
     private lateinit var program: GlProgram
     private lateinit var quad: FullscreenQuad
     private val timekeeper = Timekeeper()
+    private var visualTimeSec = 0.0
 
     fun startRenderer(): Unit = start()
 
@@ -137,10 +138,14 @@ class GlThreadRenderer(
                 }
 
                 val now = System.nanoTime()
-                val dt = timekeeper.step(now)
-                val time = timekeeper.timeSec
+            val dt = timekeeper.step(now)
+            val time = timekeeper.timeSec
+            val slowPhase = 0.5 + 0.5 * kotlin.math.sin(timekeeper.timeSecD * 0.25)
+            val slowAmount = smoothstep(0.74, 0.94, slowPhase)
+            val slowFactor = lerp(1.0, 0.45, slowAmount)
+            visualTimeSec += dt * slowFactor
 
-                renderFrame(dt, time)
+            renderFrame(dt, visualTimeSec.toFloat())
 
                 val s = settings
                 val targetFrameNs = when (s.fpsMode) {
@@ -216,6 +221,15 @@ class GlThreadRenderer(
     }
 
     companion object {
+        private fun smoothstep(edge0: Double, edge1: Double, x: Double): Double {
+            val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0.0, 1.0)
+            return t * t * (3.0 - 2.0 * t)
+        }
+
+        private fun lerp(a: Double, b: Double, t: Double): Double {
+            return a + (b - a) * t
+        }
+
         private val VERTEX_GLSL_300 = """
 #version 300 es
 layout(location=0) in vec2 a_pos;
