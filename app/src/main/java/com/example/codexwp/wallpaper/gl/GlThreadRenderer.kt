@@ -472,9 +472,9 @@ void main() {
   float coreD = exp(-(yD*yD)/(thD*thD));
   float coreE = exp(-(yE*yE)/(thE*thE));
 
-  float glowA = exp(-(yA*yA)/(thA*thA*9.0));
-  float glowB = exp(-(yB*yB)/(thB*thB*8.0));
-  float glowC = exp(-(yC*yC)/(thC*thC*7.0));
+  float glowA = exp(-(yA*yA)/(thA*thA*5.0));
+  float glowB = exp(-(yB*yB)/(thB*thB*4.5));
+  float glowC = exp(-(yC*yC)/(thC*thC*4.0));
   float glowD = exp(-(yD*yD)/(thD*thD*6.0));
   float glowE = exp(-(yE*yE)/(thE*thE*6.0));
 
@@ -485,8 +485,8 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6 + coreD*0.5 + coreE*0.4;
-  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45 + glowD*0.35 + glowE*0.28;
+  float aCore = coreA*1.15 + coreB*0.85 + coreC*0.65 + coreD*0.55 + coreE*0.45;
+  float aGlow = glowA*0.45 + glowB*0.35 + glowC*0.28 + glowD*0.22 + glowE*0.18;
 
   // speckle particles along the streaks
   float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
@@ -501,7 +501,7 @@ void main() {
     ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
   }
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost + ringMask) * vign * tail;
+  vec3 rgb = col * (aCore + aGlow + speckle*0.6 + coreBoost + ringMask) * vign * tail;
   outColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
@@ -648,9 +648,9 @@ void main() {
   float coreD = exp(-(yD*yD)/(thD*thD));
   float coreE = exp(-(yE*yE)/(thE*thE));
 
-  float glowA = exp(-(yA*yA)/(thA*thA*9.0));
-  float glowB = exp(-(yB*yB)/(thB*thB*8.0));
-  float glowC = exp(-(yC*yC)/(thC*thC*7.0));
+  float glowA = exp(-(yA*yA)/(thA*thA*5.0));
+  float glowB = exp(-(yB*yB)/(thB*thB*4.5));
+  float glowC = exp(-(yC*yC)/(thC*thC*4.0));
   float glowD = exp(-(yD*yD)/(thD*thD*6.0));
   float glowE = exp(-(yE*yE)/(thE*thE*6.0));
 
@@ -660,8 +660,8 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6 + coreD*0.5 + coreE*0.4;
-  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45 + glowD*0.35 + glowE*0.28;
+  float aCore = coreA*1.15 + coreB*0.85 + coreC*0.65 + coreD*0.55 + coreE*0.45;
+  float aGlow = glowA*0.45 + glowB*0.35 + glowC*0.28 + glowD*0.22 + glowE*0.18;
 
   float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
   speckle = pow(max(0.0, speckle - 0.55), 3.0);
@@ -675,7 +675,7 @@ void main() {
     ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
   }
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.9 + coreBoost + ringMask) * vign * tail;
+  vec3 rgb = col * (aCore + aGlow + speckle*0.6 + coreBoost + ringMask) * vign * tail;
   gl_FragColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
