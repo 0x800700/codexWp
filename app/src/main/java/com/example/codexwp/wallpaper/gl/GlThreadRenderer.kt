@@ -218,6 +218,7 @@ class GlThreadRenderer(
             windowSurface = WindowSurface(eglCore, surface)
             windowSurface.create()
             windowSurface.makeCurrent()
+            eglCore.setSwapInterval(1)
 
             program = if (eglCore.isGles3) {
                 GlProgram(VERTEX_GLSL_300, FRAGMENT_GLSL_300)
@@ -262,10 +263,7 @@ class GlThreadRenderer(
                         try { sleep(sleepNs / 1_000_000L, (sleepNs % 1_000_000L).toInt()) } catch (_: InterruptedException) {}
                     }
                 } else {
-                    val frameNs = System.nanoTime() - lastFrameNanos
-                    if (frameNs < 12_000_000L) {
-                        try { sleep(0, 500_000) } catch (_: InterruptedException) {}
-                    }
+                    // FPS_AUTO: rely on VSync (swap interval) for pacing
                 }
                 lastFrameNanos = System.nanoTime()
             }

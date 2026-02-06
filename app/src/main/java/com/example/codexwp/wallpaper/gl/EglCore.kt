@@ -60,6 +60,10 @@ class EglCore {
         return EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, surface, surfaceAttribs, 0)
     }
 
+    fun setSwapInterval(interval: Int) {
+        EGL14.eglSwapInterval(eglDisplay, interval)
+    }
+
     fun makeCurrent(surface: EGLSurface) {
         check(EGL14.eglMakeCurrent(eglDisplay, surface, surface, eglContext)) { "eglMakeCurrent failed" }
     }
