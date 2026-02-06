@@ -5,10 +5,16 @@ import android.opengl.GLES20
 import android.opengl.GLES30
 import android.view.MotionEvent
 import android.view.Surface
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.atan2
 import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class GlThreadRenderer(
     private val ctx: Context,
@@ -40,6 +46,29 @@ class GlThreadRenderer(
     private var visualTimeSec = 0.0
     private var rngState = 0x6D2B79F5
 
+    // powder burst particles (on swipe right)
+    private val burstCount = 2500
+    private val burstX = FloatArray(burstCount)
+    private val burstY = FloatArray(burstCount)
+    private val burstVx = FloatArray(burstCount)
+    private val burstVy = FloatArray(burstCount)
+    private val burstLife = FloatArray(burstCount)
+    private val burstMaxLife = FloatArray(burstCount)
+    private val burstSize = FloatArray(burstCount)
+    private val burstBright = FloatArray(burstCount)
+    private val burstR = FloatArray(burstCount)
+    private val burstG = FloatArray(burstCount)
+    private val burstB = FloatArray(burstCount)
+    private var burstAlive = 0
+    @Volatile private var burstPending = 0f
+    private var lastOffsetX = 0f
+    private var lastOffsetTime = 0L
+    private var burstProgramId = 0
+    private var burstPosAttr = 0
+    private var burstColAttr = 1
+    private var burstSizeAttr = 2
+    private lateinit var burstBuffer: FloatBuffer
+
     fun startRenderer(): Unit = start()
 
     fun shutdown() {
@@ -64,6 +93,18 @@ class GlThreadRenderer(
         homeYOffset = y
         homeXPixel = xPix
         homeYPixel = yPix
+
+        val now = System.nanoTime()
+        if (lastOffsetTime != 0L) {
+            val dx = x - lastOffsetX
+            val dt = (now - lastOffsetTime) / 1e9f
+            if (dx > 0.02f && dt > 0f && dt < 0.35f) {
+                val strength = min(1f, dx / dt * 0.15f)
+                if (strength > burstPending) burstPending = strength
+            }
+        }
+        lastOffsetX = x
+        lastOffsetTime = now
     }
 
     fun updateSettings(s: SettingsState) { settings = s }
@@ -184,9 +225,11 @@ class GlThreadRenderer(
                 GlProgram(VERTEX_GLSL_100, FRAGMENT_GLSL_100)
             }
             quad = FullscreenQuad()
+            initBurstProgram()
 
             GLES20.glDisable(GLES20.GL_DEPTH_TEST)
             GLES20.glDisable(GLES20.GL_CULL_FACE)
+            GLES20.glEnable(0x8642) // GL_PROGRAM_POINT_SIZE
 
             var lastFrameNanos = System.nanoTime()
 
@@ -229,6 +272,10 @@ class GlThreadRenderer(
         } finally {
             if (this::quad.isInitialized) quad.release()
             if (this::program.isInitialized) program.release()
+            if (burstProgramId != 0) {
+                GLES20.glDeleteProgram(burstProgramId)
+                burstProgramId = 0
+            }
             if (this::windowSurface.isInitialized) windowSurface.release()
             if (this::eglCore.isInitialized) eglCore.release()
         }
@@ -299,6 +346,14 @@ class GlThreadRenderer(
         program.setSpeed(s.speed)
         program.setColorMode(s.colorMode)
         quad.draw()
+        if (burstPending > 0f || burstAlive > 0) {
+            val strength = burstPending
+            if (strength > 0f) {
+                spawnBurst(strength, 0.5f + (homeXOffset - 0.5f) * 0.20f, 0.5f)
+                burstPending = 0f
+            }
+            renderBurst(dtSec, w, h)
+        }
         windowSurface.swapBuffers()
     }
 
@@ -306,6 +361,164 @@ class GlThreadRenderer(
         rngState = nextRand(rngState)
         val m = kotlin.math.abs(rngState) % 3
         return m + 1
+    }
+
+    private fun initBurstProgram() {
+        if (burstProgramId != 0) return
+        val vs = """
+            attribute vec2 a_pos;
+            attribute vec4 a_col;
+            attribute float a_size;
+            varying vec4 v_col;
+            void main() {
+              v_col = a_col;
+              gl_Position = vec4(a_pos, 0.0, 1.0);
+              gl_PointSize = a_size;
+            }
+        """.trimIndent()
+        val fs = """
+            precision mediump float;
+            varying vec4 v_col;
+            void main() {
+              gl_FragColor = v_col;
+            }
+        """.trimIndent()
+        val v = compileShader(GLES20.GL_VERTEX_SHADER, vs)
+        val f = compileShader(GLES20.GL_FRAGMENT_SHADER, fs)
+        val p = GLES20.glCreateProgram()
+        GLES20.glAttachShader(p, v)
+        GLES20.glAttachShader(p, f)
+        GLES20.glBindAttribLocation(p, 0, "a_pos")
+        GLES20.glBindAttribLocation(p, 1, "a_col")
+        GLES20.glBindAttribLocation(p, 2, "a_size")
+        GLES20.glLinkProgram(p)
+        val link = IntArray(1)
+        GLES20.glGetProgramiv(p, GLES20.GL_LINK_STATUS, link, 0)
+        check(link[0] == GLES20.GL_TRUE) { GLES20.glGetProgramInfoLog(p) }
+        GLES20.glDeleteShader(v)
+        GLES20.glDeleteShader(f)
+        burstProgramId = p
+        burstPosAttr = 0
+        burstColAttr = 1
+        burstSizeAttr = 2
+
+        val floatsPerVertex = 7
+        val buffer = ByteBuffer.allocateDirect(burstCount * floatsPerVertex * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+        burstBuffer = buffer
+    }
+
+    private fun spawnBurst(strength: Float, cx: Float, cy: Float) {
+        burstAlive = burstCount
+        for (i in 0 until burstCount) {
+            val a = randFloat(0f, (2f * Math.PI).toFloat())
+            val speed = randFloat(0.4f, 1.3f) * (0.6f + strength)
+            burstVx[i] = cos(a) * speed
+            burstVy[i] = sin(a) * speed
+            burstX[i] = cx + randFloat(-0.01f, 0.01f)
+            burstY[i] = cy + randFloat(-0.01f, 0.01f)
+            val life = randFloat(0.8f, 1.6f)
+            burstMaxLife[i] = life
+            burstLife[i] = life
+            val hero = randFloat(0f, 1f) > 0.90f
+            burstSize[i] = if (hero) randFloat(3f, 5f) else randFloat(1f, 2.5f)
+            burstBright[i] = if (hero) randFloat(1.1f, 1.6f) else randFloat(0.6f, 1.0f)
+            val accent = randFloat(0f, 1f) > 0.95f
+            if (accent) {
+                burstR[i] = randFloat(0.9f, 1.0f)
+                burstG[i] = randFloat(0.25f, 0.45f)
+                burstB[i] = randFloat(0.15f, 0.30f)
+            } else {
+                burstR[i] = randFloat(0.6f, 0.85f)
+                burstG[i] = randFloat(0.75f, 0.95f)
+                burstB[i] = randFloat(0.9f, 1.0f)
+            }
+        }
+    }
+
+    private fun renderBurst(dtSec: Float, w: Float, h: Float) {
+        if (burstAlive <= 0) return
+        val aspect = w / h
+        val maxR = 1.2f
+        val gravity = -0.10f
+        val drag = 0.98f
+
+        burstBuffer.position(0)
+        var aliveCount = 0
+        for (i in 0 until burstCount) {
+            var life = burstLife[i] - dtSec
+            if (life <= 0f) {
+                burstLife[i] = 0f
+                continue
+            }
+            burstLife[i] = life
+            burstVx[i] *= (1f + dtSec * 0.6f)
+            burstVy[i] = (burstVy[i] + gravity * dtSec) * drag
+            burstX[i] += burstVx[i] * dtSec
+            burstY[i] += burstVy[i] * dtSec
+            val x = burstX[i]
+            val y = burstY[i]
+            if (x < -0.2f || x > 1.2f || y < -0.2f || y > 1.2f) {
+                burstLife[i] = 0f
+                continue
+            }
+
+            val nx = (x - 0.5f) * 2f
+            val ny = (y - 0.5f) * 2f
+            val posX = nx
+            val posY = ny
+
+            val a = (life / burstMaxLife[i]).coerceIn(0f, 1f)
+            val alpha = burstBright[i] * a
+
+            burstBuffer.put(posX)
+            burstBuffer.put(posY)
+            burstBuffer.put(burstR[i])
+            burstBuffer.put(burstG[i])
+            burstBuffer.put(burstB[i])
+            burstBuffer.put(alpha)
+            burstBuffer.put(burstSize[i])
+            aliveCount++
+        }
+        burstAlive = aliveCount
+        if (aliveCount == 0) return
+
+        burstBuffer.position(0)
+        GLES20.glUseProgram(burstProgramId)
+        GLES20.glEnable(GLES20.GL_BLEND)
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE)
+        val stride = 7 * 4
+        GLES20.glEnableVertexAttribArray(burstPosAttr)
+        GLES20.glEnableVertexAttribArray(burstColAttr)
+        GLES20.glEnableVertexAttribArray(burstSizeAttr)
+        burstBuffer.position(0)
+        GLES20.glVertexAttribPointer(burstPosAttr, 2, GLES20.GL_FLOAT, false, stride, burstBuffer)
+        burstBuffer.position(2)
+        GLES20.glVertexAttribPointer(burstColAttr, 4, GLES20.GL_FLOAT, false, stride, burstBuffer)
+        burstBuffer.position(6)
+        GLES20.glVertexAttribPointer(burstSizeAttr, 1, GLES20.GL_FLOAT, false, stride, burstBuffer)
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, aliveCount)
+        GLES20.glDisableVertexAttribArray(burstPosAttr)
+        GLES20.glDisableVertexAttribArray(burstColAttr)
+        GLES20.glDisableVertexAttribArray(burstSizeAttr)
+        GLES20.glDisable(GLES20.GL_BLEND)
+    }
+
+    private fun compileShader(type: Int, src: String): Int {
+        val id = GLES20.glCreateShader(type)
+        GLES20.glShaderSource(id, src)
+        GLES20.glCompileShader(id)
+        val compiled = IntArray(1)
+        GLES20.glGetShaderiv(id, GLES20.GL_COMPILE_STATUS, compiled, 0)
+        check(compiled[0] == GLES20.GL_TRUE) { GLES20.glGetShaderInfoLog(id) }
+        return id
+    }
+
+    private fun randFloat(minV: Float, maxV: Float): Float {
+        rngState = nextRand(rngState)
+        val v = (rngState ushr 1).toFloat() / Int.MAX_VALUE.toFloat()
+        return minV + (maxV - minV) * v
     }
 
     companion object {
