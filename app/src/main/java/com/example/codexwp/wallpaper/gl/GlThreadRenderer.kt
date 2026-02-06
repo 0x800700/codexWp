@@ -304,7 +304,8 @@ class GlThreadRenderer(
 
     private fun nextTunnelMode(): Int {
         rngState = nextRand(rngState)
-        return if ((rngState and 1) == 0) 1 else 2
+        val m = kotlin.math.abs(rngState) % 3
+        return m + 1
     }
 
     companion object {
@@ -427,6 +428,11 @@ void main() {
     float spin = u_tunnelPhase * 1.2;
     ang += spin * pull + twist * 0.5;
     rr = rr * (1.0 - pull * 0.45);
+  } else if (u_tunnelMode == 3) {
+    // segmented energy tunnel
+    float spin = u_tunnelPhase * 1.6;
+    ang += spin * 0.35 + twist * 0.4;
+    rr = rr * (1.0 - pull * 0.40);
   } else {
     // vortex pull (default)
     ang += twist * 0.8 + u_tunnelPhase * 0.8 * pull;
@@ -441,42 +447,26 @@ void main() {
 
   float x = p.x;
 
-  // multi-layer feathered streaks (different speeds per layer)
-  float tA = t * 1.00;
-  float tB = t * 0.82;
-  float tC = t * 1.18;
-  float tD = t * 0.66;
-  float tE = t * 1.35;
-
-  float y0a = 0.23*sin(1.6*x + tA*0.85) + 0.10*sin(3.2*x - tA*0.55);
-  float y0b = 0.18*sin(1.1*x - tB*0.65) + 0.08*sin(2.6*x + tB*0.35);
-  float y0c = 0.12*sin(2.2*x + tC*0.45) + 0.06*sin(4.1*x - tC*0.25);
-  float y0d = 0.09*sin(2.8*x + tD*0.30) + 0.05*sin(5.0*x + tD*0.15);
-  float y0e = 0.07*sin(3.4*x - tE*0.22) + 0.04*sin(6.2*x - tE*0.12);
+  // multi-layer feathered streaks
+  float y0a = 0.23*sin(1.6*x + t*0.85) + 0.10*sin(3.2*x - t*0.55);
+  float y0b = 0.18*sin(1.1*x - t*0.65) + 0.08*sin(2.6*x + t*0.35);
+  float y0c = 0.12*sin(2.2*x + t*0.45) + 0.06*sin(4.1*x - t*0.25);
 
   float yA = p.y - y0a;
   float yB = p.y - y0b;
   float yC = p.y - y0c;
-  float yD = p.y - y0d;
-  float yE = p.y - y0e;
 
-  float thA = 0.045 + 0.02*sin(tA + x*1.6);
-  float thB = 0.035 + 0.015*sin(tB*1.2 + x*2.1);
-  float thC = 0.028 + 0.012*sin(tC*1.4 + x*2.6);
-  float thD = 0.022 + 0.010*sin(tD*1.6 + x*3.1);
-  float thE = 0.018 + 0.008*sin(tE*1.8 + x*3.6);
+  float thA = 0.045 + 0.02*sin(t + x*1.6);
+  float thB = 0.035 + 0.015*sin(t*1.2 + x*2.1);
+  float thC = 0.028 + 0.012*sin(t*1.4 + x*2.6);
 
   float coreA = exp(-(yA*yA)/(thA*thA));
   float coreB = exp(-(yB*yB)/(thB*thB));
   float coreC = exp(-(yC*yC)/(thC*thC));
-  float coreD = exp(-(yD*yD)/(thD*thD));
-  float coreE = exp(-(yE*yE)/(thE*thE));
 
-  float glowA = exp(-(yA*yA)/(thA*thA*5.0));
-  float glowB = exp(-(yB*yB)/(thB*thB*4.5));
-  float glowC = exp(-(yC*yC)/(thC*thC*4.0));
-  float glowD = exp(-(yD*yD)/(thD*thD*6.0));
-  float glowE = exp(-(yE*yE)/(thE*thE*6.0));
+  float glowA = exp(-(yA*yA)/(thA*thA*9.0));
+  float glowB = exp(-(yB*yB)/(thB*thB*8.0));
+  float glowC = exp(-(yC*yC)/(thC*thC*7.0));
 
   // longer tail: soften with directional mask
   float tail = smoothstep(-0.9, 0.6, p.x);
@@ -485,23 +475,26 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.15 + coreB*0.85 + coreC*0.65 + coreD*0.55 + coreE*0.45;
-  float aGlow = glowA*0.45 + glowB*0.35 + glowC*0.28 + glowD*0.22 + glowE*0.18;
-
-  // speckle particles along the streaks
-  float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
-  speckle = pow(max(0.0, speckle - 0.55), 3.0);
-
-  float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
+  float coreBoost = 0.0;
   float ringMask = 0.0;
+  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6;
+  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45;
+
   if (u_tunnelMode == 2) {
     float rings = 0.5 + 0.5*sin(rr * 28.0 - u_tunnelPhase * 6.0);
     float ringSharp = pow(rings, 6.0);
     float seg = 0.5 + 0.5*sin(ang * 6.0 + u_tunnelPhase * 1.8);
     ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
+  } else if (u_tunnelMode == 3) {
+    float ring1 = pow(0.5 + 0.5*sin(rr * 34.0 - u_tunnelPhase * 7.5), 7.0);
+    float ring2 = pow(0.5 + 0.5*sin(rr * 20.0 + u_tunnelPhase * 4.0), 6.0);
+    float segA = pow(0.5 + 0.5*sin(ang * 10.0 + u_tunnelPhase * 2.2), 4.0);
+    float segB = pow(0.5 + 0.5*sin(ang * 6.0 - u_tunnelPhase * 1.4), 3.0);
+    float shards = (ring1 * segA + ring2 * segB) * exp(-rr * 1.6);
+    ringMask = shards * u_tunnelStrength * 1.4;
   }
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.6 + coreBoost + ringMask) * vign * tail;
+  vec3 rgb = col * (aCore + aGlow + coreBoost + ringMask) * vign * tail;
   outColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
@@ -648,9 +641,9 @@ void main() {
   float coreD = exp(-(yD*yD)/(thD*thD));
   float coreE = exp(-(yE*yE)/(thE*thE));
 
-  float glowA = exp(-(yA*yA)/(thA*thA*5.0));
-  float glowB = exp(-(yB*yB)/(thB*thB*4.5));
-  float glowC = exp(-(yC*yC)/(thC*thC*4.0));
+  float glowA = exp(-(yA*yA)/(thA*thA*9.0));
+  float glowB = exp(-(yB*yB)/(thB*thB*8.0));
+  float glowC = exp(-(yC*yC)/(thC*thC*7.0));
   float glowD = exp(-(yD*yD)/(thD*thD*6.0));
   float glowE = exp(-(yE*yE)/(thE*thE*6.0));
 
@@ -660,22 +653,26 @@ void main() {
   float ct = fract(0.22*x + 0.07*t);
   vec3 col = palette(ct, u_colorMode);
 
-  float aCore = coreA*1.15 + coreB*0.85 + coreC*0.65 + coreD*0.55 + coreE*0.45;
-  float aGlow = glowA*0.45 + glowB*0.35 + glowC*0.28 + glowD*0.22 + glowE*0.18;
-
-  float speckle = noise(vec2(x*8.0, (yA+yB+yC)*18.0) + t*0.9);
-  speckle = pow(max(0.0, speckle - 0.55), 3.0);
-
-  float coreBoost = exp(-rr * 6.0) * u_tunnelStrength * 1.6;
+  float coreBoost = 0.0;
   float ringMask = 0.0;
+  float aCore = coreA*1.1 + coreB*0.8 + coreC*0.6;
+  float aGlow = glowA*0.8 + glowB*0.6 + glowC*0.45;
+
   if (u_tunnelMode == 2) {
     float rings = 0.5 + 0.5*sin(rr * 28.0 - u_tunnelPhase * 6.0);
     float ringSharp = pow(rings, 6.0);
     float seg = 0.5 + 0.5*sin(ang * 6.0 + u_tunnelPhase * 1.8);
     ringMask = ringSharp * seg * exp(-rr * 1.8) * u_tunnelStrength * 1.2;
+  } else if (u_tunnelMode == 3) {
+    float ring1 = pow(0.5 + 0.5*sin(rr * 34.0 - u_tunnelPhase * 7.5), 7.0);
+    float ring2 = pow(0.5 + 0.5*sin(rr * 20.0 + u_tunnelPhase * 4.0), 6.0);
+    float segA = pow(0.5 + 0.5*sin(ang * 10.0 + u_tunnelPhase * 2.2), 4.0);
+    float segB = pow(0.5 + 0.5*sin(ang * 6.0 - u_tunnelPhase * 1.4), 3.0);
+    float shards = (ring1 * segA + ring2 * segB) * exp(-rr * 1.6);
+    ringMask = shards * u_tunnelStrength * 1.4;
   }
 
-  vec3 rgb = col * (aCore + aGlow + speckle*0.6 + coreBoost + ringMask) * vign * tail;
+  vec3 rgb = col * (aCore + aGlow + coreBoost + ringMask) * vign * tail;
   gl_FragColor = vec4(rgb, 1.0);
 }
 """.trimIndent()
